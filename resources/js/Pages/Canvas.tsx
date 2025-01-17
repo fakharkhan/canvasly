@@ -177,6 +177,10 @@ export default function Canvas({ canvases: initialCanvases }: Props) {
 
     const confirmDelete = () => {
         if (canvasToDelete) {
+            // Close modal first
+            setIsDeleteModalOpen(false);
+            setCanvasToDelete(null);
+            
             // Start removal animation
             setRemovingCanvases(prev => new Set([...prev, canvasToDelete.id]));
             
@@ -200,8 +204,6 @@ export default function Canvas({ canvases: initialCanvases }: Props) {
                             newSet.delete(canvasToDelete.id);
                             return newSet;
                         });
-                        setIsDeleteModalOpen(false);
-                        setCanvasToDelete(null);
                     }
                 });
             }, 300); // Match this with the CSS transition duration

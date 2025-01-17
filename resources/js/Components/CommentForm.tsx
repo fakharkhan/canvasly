@@ -29,7 +29,7 @@ export default function CommentForm({
     };
 
     return (
-        <div className="comment-window absolute left-8 top-0 w-64 bg-white dark:bg-gray-700 p-4 rounded-lg shadow-lg z-50">
+        <div className="comment-window absolute -left-[268px] top-0 w-64 bg-white dark:bg-gray-700 p-4 rounded-lg shadow-lg z-50">
             <form onSubmit={handleSubmit}>
                 <textarea
                     className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-600 mb-3"

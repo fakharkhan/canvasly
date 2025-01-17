@@ -354,7 +354,7 @@ export default function Editor({ canvas, comments: initialComments = [], flash }
                                                     initialContent={comment.content}
                                                 />
                                             ) : commentDisplays[comment.id]?.isEditing && comment.content && (
-                                                <div className="comment-display absolute left-8 top-0 w-64 bg-white dark:bg-gray-700 p-4 rounded-lg shadow-lg z-50">
+                                                <div className="comment-display absolute -left-[268px] top-0 w-64 bg-white dark:bg-gray-700 p-4 rounded-lg shadow-lg z-50">
                                                     <div className="flex items-start justify-between gap-3 mb-2">
                                                         <div className="flex items-start gap-3">
                                                             <div className="flex-shrink-0">

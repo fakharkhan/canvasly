@@ -45,10 +45,10 @@ export default function Editor({ canvas }: Props) {
         >
             <Head title={`Edit Canvas - ${canvas.url}`} />
 
-            <div className="py-12">
-                <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
-                    <div className="overflow-hidden bg-white shadow-sm sm:rounded-lg dark:bg-gray-800">
-                        <div className="p-6 text-gray-900 dark:text-gray-100">
+            <div className="mt-2 px-2">
+                <div className="h-[calc(100vh-7.5rem)] w-full">
+                    <div className="h-full overflow-hidden bg-white shadow-sm dark:bg-gray-800">
+                        <div className="h-full p-6 text-gray-900 dark:text-gray-100">
                             {/* Editor content will go here */}
                             Editing canvas: {canvas.url}
                             <div className="mt-4 text-sm text-gray-500">

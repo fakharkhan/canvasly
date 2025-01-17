@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 
 interface Canvas {
     id: number;
@@ -15,10 +15,32 @@ interface Props {
 export default function Editor({ canvas }: Props) {
     return (
         <AuthenticatedLayout
+            hideNavigation={true}
             header={
-                <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
-                    Canvas Editor - {canvas.url}
-                </h2>
+                <div className="flex items-center gap-3">
+                    <Link
+                        href={route('canvas')}
+                        className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={2}
+                            stroke="currentColor"
+                            className="h-6 w-6"
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"
+                            />
+                        </svg>
+                    </Link>
+                    <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
+                        Canvas Editor - {canvas.url}
+                    </h2>
+                </div>
             }
         >
             <Head title={`Edit Canvas - ${canvas.url}`} />

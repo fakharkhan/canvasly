@@ -38,6 +38,8 @@
     "dependencies": {
         "@heroicons/react": "^2.2.0",
         "@puppeteer/browsers": "^2.7.0",
-        "puppeteer": "^24.1.0"
+        "laravel-echo": "^1.18.0",
+        "puppeteer": "^24.1.0",
+        "pusher-js": "^8.4.0-rc2"
     }
 }

@@ -1,11 +1,30 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm } from '@inertiajs/react';
-import { PencilIcon, XMarkIcon, TrashIcon, PhotoIcon, PlusIcon } from '@heroicons/react/24/outline';
-import { useState } from 'react';
+import { PencilIcon, XMarkIcon, TrashIcon, PhotoIcon, PlusIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { useState, useEffect } from 'react';
 import InputError from '@/Components/InputError';
 import InputLabel from '@/Components/InputLabel';
 import TextInput from '@/Components/TextInput';
 import PrimaryButton from '@/Components/PrimaryButton';
+import Pusher from 'pusher-js';
+import Echo from 'laravel-echo';
+
+// Initialize Laravel Echo with Pusher
+declare global {
+    interface Window {
+        Echo: Echo;
+        Pusher: typeof Pusher;
+    }
+}
+
+window.Pusher = Pusher;
+
+window.Echo = new Echo({
+    broadcaster: 'pusher',
+    key: import.meta.env.VITE_PUSHER_APP_KEY,
+    cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
+    forceTLS: true
+});
 
 interface Canvas {
     id: number;
@@ -18,10 +37,55 @@ interface Props {
     canvases: Canvas[];
 }
 
-export default function Canvas({ canvases }: Props) {
+export default function Canvas({ canvases: initialCanvases }: Props) {
+    const [canvases, setCanvases] = useState(initialCanvases);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [canvasToDelete, setCanvasToDelete] = useState<Canvas | null>(null);
     const [selectedCanvas, setSelectedCanvas] = useState<Canvas | null>(null);
     const [failedImages, setFailedImages] = useState<Set<number>>(new Set());
+    const [loadingThumbnails, setLoadingThumbnails] = useState<Set<number>>(new Set());
+    const [removingCanvases, setRemovingCanvases] = useState<Set<number>>(new Set());
+
+    useEffect(() => {
+        // Initialize loading state for canvases without thumbnails
+        setLoadingThumbnails(new Set(
+            canvases.filter(canvas => !canvas.thumbnail).map(canvas => canvas.id)
+        ));
+
+        // Use the global Echo instance
+        window.Echo.channel('canvas')
+            .listen('CanvasUpdated', (e: { canvas: Canvas }) => {
+                console.log('Received canvas update:', e);
+                
+                // Update the canvas with all properties from the event
+                setCanvases(currentCanvases =>
+                    currentCanvases.map(canvas =>
+                        canvas.id === e.canvas.id
+                            ? { ...e.canvas }
+                            : canvas
+                    )
+                );
+
+                // Remove from loading state since we have the thumbnail now
+                setLoadingThumbnails(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(e.canvas.id);
+                    return newSet;
+                });
+
+                // Remove from failed state if it was there
+                setFailedImages(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(e.canvas.id);
+                    return newSet;
+                });
+            });
+
+        return () => {
+            window.Echo.leaveChannel('canvas');
+        };
+    }, []);
 
     const { data, setData, post, patch, processing, errors, reset } = useForm({
         url: '',
@@ -56,32 +120,112 @@ export default function Canvas({ canvases }: Props) {
             patch(route('canvas.update', selectedCanvas.id), {
                 onSuccess: () => {
                     closeModal();
-                    setFailedImages(new Set());
+                    setLoadingThumbnails(prev => new Set([...prev, selectedCanvas.id]));
                 },
             });
         } else {
+            // Create new canvas immediately with loading state
+            const newCanvas = {
+                id: Date.now(), // Temporary ID
+                url: data.url,
+                description: data.description,
+                thumbnail: null
+            };
+            
+            // Add to list immediately
+            setCanvases(prev => [newCanvas, ...prev]);
+            setLoadingThumbnails(prev => new Set([...prev, newCanvas.id]));
+            closeModal();
+
+            // Then make the API call
             post(route('canvas.store'), {
-                onSuccess: () => {
-                    closeModal();
-                    setFailedImages(new Set());
+                data,
+                preserveScroll: true,
+                onSuccess: (page: any) => {
+                    const responseCanvas = page.props?.flash?.canvas;
+                    if (responseCanvas) {
+                        // Replace temporary canvas with real one
+                        setCanvases(prev => prev.map(canvas => 
+                            canvas.id === newCanvas.id ? responseCanvas : canvas
+                        ));
+                        // Update loading state with real ID
+                        setLoadingThumbnails(prev => {
+                            const newSet = new Set(prev);
+                            newSet.delete(newCanvas.id);
+                            newSet.add(responseCanvas.id);
+                            return newSet;
+                        });
+                    }
                 },
+                onError: () => {
+                    // Remove the temporary canvas if the API call fails
+                    setCanvases(prev => prev.filter(canvas => canvas.id !== newCanvas.id));
+                    setLoadingThumbnails(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete(newCanvas.id);
+                        return newSet;
+                    });
+                }
             });
         }
     };
 
     const handleDelete = (canvas: Canvas) => {
-        if (confirm('Are you sure you want to delete this canvas?')) {
-            deleteForm.delete(route('canvas.destroy', canvas.id));
+        setCanvasToDelete(canvas);
+        setIsDeleteModalOpen(true);
+    };
+
+    const confirmDelete = () => {
+        if (canvasToDelete) {
+            // Start removal animation
+            setRemovingCanvases(prev => new Set([...prev, canvasToDelete.id]));
+            
+            // Wait for animation to complete before actual removal
+            setTimeout(() => {
+                deleteForm.delete(route('canvas.destroy', canvasToDelete.id), {
+                    onSuccess: () => {
+                        setCanvases(prev => prev.filter(c => c.id !== canvasToDelete.id));
+                        setLoadingThumbnails(prev => {
+                            const newSet = new Set(prev);
+                            newSet.delete(canvasToDelete.id);
+                            return newSet;
+                        });
+                        setFailedImages(prev => {
+                            const newSet = new Set(prev);
+                            newSet.delete(canvasToDelete.id);
+                            return newSet;
+                        });
+                        setRemovingCanvases(prev => {
+                            const newSet = new Set(prev);
+                            newSet.delete(canvasToDelete.id);
+                            return newSet;
+                        });
+                        setIsDeleteModalOpen(false);
+                        setCanvasToDelete(null);
+                    }
+                });
+            }, 300); // Match this with the CSS transition duration
         }
+    };
+
+    const cancelDelete = () => {
+        setIsDeleteModalOpen(false);
+        setCanvasToDelete(null);
     };
 
     const handleImageError = (canvasId: number) => {
         setFailedImages(prev => new Set([...prev, canvasId]));
+        setLoadingThumbnails(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(canvasId);
+            return newSet;
+        });
         console.error(`Failed to load image for canvas ${canvasId}`);
     };
 
     const getThumbnailUrl = (canvas: Canvas): string => {
         if (canvas.thumbnail) {
+            // The thumbnail URL from the server already includes the storage path
             return canvas.thumbnail;
         }
         return 'https://via.placeholder.com/1280x720?text=No+Preview';
@@ -110,9 +254,29 @@ export default function Canvas({ canvases }: Props) {
                 <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                         {canvases.map((canvas) => (
-                            <div key={canvas.id} className="group relative overflow-hidden rounded-lg bg-white shadow-sm dark:bg-gray-800">
+                            <div
+                                key={canvas.id}
+                                className={`group relative overflow-hidden rounded-lg bg-white shadow-sm dark:bg-gray-800 transition-all duration-300 ease-in-out ${
+                                    removingCanvases.has(canvas.id)
+                                        ? 'opacity-0 scale-95 transform'
+                                        : 'opacity-100 scale-100'
+                                }`}
+                            >
                                 <div className="aspect-w-16 aspect-h-14 bg-gray-100 dark:bg-gray-700">
-                                    {!failedImages.has(canvas.id) ? (
+                                    {loadingThumbnails.has(canvas.id) ? (
+                                        <div className="flex flex-col items-center justify-center space-y-4 p-8">
+                                            <div className="relative">
+                                                <div className="h-12 w-12 rounded-full border-4 border-gray-200 border-t-indigo-600 animate-spin"></div>
+                                                <div className="absolute inset-0 flex items-center justify-center">
+                                                    <PhotoIcon className="h-5 w-5 text-indigo-600" />
+                                                </div>
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Generating thumbnail</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">This may take a few moments...</p>
+                                            </div>
+                                        </div>
+                                    ) : !failedImages.has(canvas.id) ? (
                                         <img
                                             src={getThumbnailUrl(canvas)}
                                             alt={canvas.description || 'Canvas thumbnail'}
@@ -120,8 +284,14 @@ export default function Canvas({ canvases }: Props) {
                                             onError={() => handleImageError(canvas.id)}
                                         />
                                     ) : (
-                                        <div className="flex items-center justify-center">
-                                            <PhotoIcon className="h-20 w-20 text-gray-400" />
+                                        <div className="flex flex-col items-center justify-center space-y-3 p-8">
+                                            <div className="rounded-full bg-red-100 p-3">
+                                                <PhotoIcon className="h-8 w-8 text-red-600" />
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-sm font-medium text-red-600">Failed to load thumbnail</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">Please try refreshing the page</p>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -149,6 +319,54 @@ export default function Canvas({ canvases }: Props) {
                     </div>
                 </div>
             </div>
+
+            {/* Delete Confirmation Modal */}
+            {isDeleteModalOpen && canvasToDelete && (
+                <div className="fixed inset-0 z-50 overflow-y-auto">
+                    <div className="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
+                        <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+                            <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+                        </div>
+
+                        <div className="relative inline-block transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left align-middle shadow-xl transition-all dark:bg-gray-800 sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+                            <div className="sm:flex sm:items-start">
+                                <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                                    <ExclamationTriangleIcon className="h-6 w-6 text-red-600" aria-hidden="true" />
+                                </div>
+                                <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+                                    <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                                        Delete Canvas
+                                    </h3>
+                                    <div className="mt-2">
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                                            Are you sure you want to delete this canvas? This action cannot be undone.
+                                        </p>
+                                        <p className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                            {canvasToDelete.url}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                                <button
+                                    type="button"
+                                    className="inline-flex w-full justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm"
+                                    onClick={confirmDelete}
+                                >
+                                    Delete
+                                </button>
+                                <button
+                                    type="button"
+                                    className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 sm:ml-3 sm:mt-0 sm:w-auto sm:text-sm"
+                                    onClick={cancelDelete}
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Create/Edit Modal */}
             {isModalOpen && (

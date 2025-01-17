@@ -37,22 +37,15 @@ class GenerateCanvasScreenshot implements ShouldQueue
                 Storage::disk('public')->makeDirectory('thumbnails');
             }
 
-            // Take screenshot and save it
-            Log::info('Taking screenshot of URL: ' . $this->canvas->url);
-            
-            // Configure Browsershot with correct paths
-            $chromePath = base_path(env('CHROME_BINARY_PATH'));
+           
             
             Browsershot::url($this->canvas->url)
-                ->setNodeBinary(env('NODE_BINARY_PATH'))
-                ->setChromePath($chromePath)
-                ->setNodeModulePath(base_path('node_modules'))
                 ->windowSize(1280, 720)
                 ->waitUntilNetworkIdle()
                 ->setScreenshotType('jpeg', 80)
                 ->save($fullPath);
 
-            Log::info('Screenshot saved to: ' . $fullPath);
+            
 
             // Delete old thumbnail if exists
             if ($this->canvas->thumbnail) {

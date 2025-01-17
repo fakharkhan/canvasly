@@ -6,25 +6,7 @@ import InputError from '@/Components/InputError';
 import InputLabel from '@/Components/InputLabel';
 import TextInput from '@/Components/TextInput';
 import PrimaryButton from '@/Components/PrimaryButton';
-import Pusher from 'pusher-js';
-import Echo from 'laravel-echo';
-
-// Initialize Laravel Echo with Pusher
-declare global {
-    interface Window {
-        Echo: Echo;
-        Pusher: typeof Pusher;
-    }
-}
-
-window.Pusher = Pusher;
-
-window.Echo = new Echo({
-    broadcaster: 'pusher',
-    key: import.meta.env.VITE_PUSHER_APP_KEY,
-    cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
-    forceTLS: true
-});
+import { router } from '@inertiajs/react';
 
 interface Canvas {
     id: number;
@@ -45,47 +27,8 @@ export default function Canvas({ canvases: initialCanvases }: Props) {
     const [selectedCanvas, setSelectedCanvas] = useState<Canvas | null>(null);
     const [failedImages, setFailedImages] = useState<Set<number>>(new Set());
     const [loadingThumbnails, setLoadingThumbnails] = useState<Set<number>>(new Set());
+    const [needsRefresh, setNeedsRefresh] = useState<Set<number>>(new Set());
     const [removingCanvases, setRemovingCanvases] = useState<Set<number>>(new Set());
-
-    useEffect(() => {
-        // Initialize loading state for canvases without thumbnails
-        setLoadingThumbnails(new Set(
-            canvases.filter(canvas => !canvas.thumbnail).map(canvas => canvas.id)
-        ));
-
-        // Use the global Echo instance
-        window.Echo.channel('canvas')
-            .listen('CanvasUpdated', (e: { canvas: Canvas }) => {
-                console.log('Received canvas update:', e);
-                
-                // Update the canvas with all properties from the event
-                setCanvases(currentCanvases =>
-                    currentCanvases.map(canvas =>
-                        canvas.id === e.canvas.id
-                            ? { ...e.canvas }
-                            : canvas
-                    )
-                );
-
-                // Remove from loading state since we have the thumbnail now
-                setLoadingThumbnails(prev => {
-                    const newSet = new Set(prev);
-                    newSet.delete(e.canvas.id);
-                    return newSet;
-                });
-
-                // Remove from failed state if it was there
-                setFailedImages(prev => {
-                    const newSet = new Set(prev);
-                    newSet.delete(e.canvas.id);
-                    return newSet;
-                });
-            });
-
-        return () => {
-            window.Echo.leaveChannel('canvas');
-        };
-    }, []);
 
     const { data, setData, post, patch, processing, errors, reset } = useForm({
         url: '',
@@ -120,54 +63,37 @@ export default function Canvas({ canvases: initialCanvases }: Props) {
             patch(route('canvas.update', selectedCanvas.id), {
                 onSuccess: () => {
                     closeModal();
-                    setLoadingThumbnails(prev => new Set([...prev, selectedCanvas.id]));
                 },
             });
         } else {
-            // Create new canvas immediately with loading state
-            const newCanvas = {
-                id: Date.now(), // Temporary ID
+            post(route('canvas.store'), {
                 url: data.url,
                 description: data.description,
-                thumbnail: null
-            };
-            
-            // Add to list immediately
-            setCanvases(prev => [newCanvas, ...prev]);
-            setLoadingThumbnails(prev => new Set([...prev, newCanvas.id]));
-            closeModal();
-
-            // Then make the API call
-            post(route('canvas.store'), {
-                data,
-                preserveScroll: true,
-                onSuccess: (page: any) => {
-                    const responseCanvas = page.props?.flash?.canvas;
-                    if (responseCanvas) {
-                        // Replace temporary canvas with real one
-                        setCanvases(prev => prev.map(canvas => 
-                            canvas.id === newCanvas.id ? responseCanvas : canvas
-                        ));
-                        // Update loading state with real ID
-                        setLoadingThumbnails(prev => {
-                            const newSet = new Set(prev);
-                            newSet.delete(newCanvas.id);
-                            newSet.add(responseCanvas.id);
-                            return newSet;
-                        });
-                    }
+                onSuccess: (page) => {
+                    console.log('Server response:', page);
+                    closeModal();
+                    
+                    // The redirect will happen automatically since we're returning
+                    // a redirect response from the server
                 },
-                onError: () => {
-                    // Remove the temporary canvas if the API call fails
-                    setCanvases(prev => prev.filter(canvas => canvas.id !== newCanvas.id));
-                    setLoadingThumbnails(prev => {
-                        const newSet = new Set(prev);
-                        newSet.delete(newCanvas.id);
-                        return newSet;
-                    });
+                onError: (errors) => {
+                    console.error('Failed to create canvas:', errors);
+                    alert('Failed to create canvas: ' + Object.values(errors).join('\n'));
+                },
+                onFinish: () => {
+                    console.log('Canvas creation request finished');
                 }
             });
         }
+    };
+
+    const handleRefresh = (canvasId: number) => {
+        setNeedsRefresh(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(canvasId);
+            return newSet;
+        });
+        router.reload();
     };
 
     const handleDelete = (canvas: Canvas) => {
@@ -227,7 +153,6 @@ export default function Canvas({ canvases: initialCanvases }: Props) {
 
     const getThumbnailUrl = (canvas: Canvas): string => {
         if (canvas.thumbnail) {
-            // The thumbnail URL from the server already includes the storage path
             return canvas.thumbnail;
         }
         return 'https://via.placeholder.com/1280x720?text=No+Preview';
@@ -276,6 +201,21 @@ export default function Canvas({ canvases: initialCanvases }: Props) {
                                             <div className="text-center">
                                                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Generating thumbnail</p>
                                                 <p className="text-xs text-gray-500 dark:text-gray-400">This may take a few moments...</p>
+                                            </div>
+                                        </div>
+                                    ) : needsRefresh.has(canvas.id) ? (
+                                        <div className="flex flex-col items-center justify-center space-y-4 p-8">
+                                            <button
+                                                onClick={() => handleRefresh(canvas.id)}
+                                                className="rounded-full bg-gray-100 p-3 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600"
+                                            >
+                                                <svg className="h-8 w-8 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                </svg>
+                                            </button>
+                                            <div className="text-center">
+                                                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Click to refresh</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">Thumbnail might be ready</p>
                                             </div>
                                         </div>
                                     ) : !failedImages.has(canvas.id) ? (

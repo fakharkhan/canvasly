@@ -69,19 +69,11 @@ export default function Canvas({ canvases: initialCanvases }: Props) {
             post(route('canvas.store'), {
                 url: data.url,
                 description: data.description,
-                onSuccess: (page) => {
-                    console.log('Server response:', page);
+                onSuccess: () => {
                     closeModal();
-                    
-                    // The redirect will happen automatically since we're returning
-                    // a redirect response from the server
                 },
                 onError: (errors) => {
-                    console.error('Failed to create canvas:', errors);
                     alert('Failed to create canvas: ' + Object.values(errors).join('\n'));
-                },
-                onFinish: () => {
-                    console.log('Canvas creation request finished');
                 }
             });
         }

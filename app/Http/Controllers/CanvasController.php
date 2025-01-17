@@ -37,14 +37,9 @@ class CanvasController extends Controller
         // Dispatch job to generate screenshot
         GenerateCanvasScreenshot::dispatch($canvas);
 
-        // Log the created canvas object
-        Log::info('Canvas created:', ['canvas' => $canvas->toArray()]);
-
-        // Return Inertia response
         return redirect()->route('canvas.editor', $canvas->id)->with([
             'success' => true,
-            'message' => 'Canvas created successfully',
-            'canvas' => $canvas
+            'message' => 'Canvas created successfully'
         ]);
     }
 

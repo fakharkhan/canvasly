@@ -393,7 +393,7 @@ export default function Editor({ canvas, comments: initialComments = [], flash }
                 </div>
             </div>
 
-            <style jsx>{`
+            <style>{`
                 .h-screen {
                     height: calc(100vh - 4rem) !important;
                 }

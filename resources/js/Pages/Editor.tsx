@@ -2,6 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import CommentForm from '@/Components/CommentForm';
+import CommentPositioner from '@/Components/CommentPositioner';
 
 interface Canvas {
     id: number;
@@ -345,45 +346,49 @@ export default function Editor({ canvas, comments: initialComments = [], flash }
                                                 {comments.indexOf(comment) + 1}
                                             </div>
                                             {comment.isOpen ? (
-                                                <CommentForm
-                                                    onSubmit={(content) => handleCommentSubmit(comment.id.toString(), content)}
-                                                    onCancel={() => handleCloseComment(comment.id.toString())}
-                                                    onDelete={() => handleDeleteComment(comment.id)}
-                                                    isExisting={!comment.id.toString().startsWith('temp-')}
-                                                    isCommentMode={isCommentMode}
-                                                    initialContent={comment.content}
-                                                />
+                                                <CommentPositioner>
+                                                    <CommentForm
+                                                        onSubmit={(content) => handleCommentSubmit(comment.id.toString(), content)}
+                                                        onCancel={() => handleCloseComment(comment.id.toString())}
+                                                        onDelete={() => handleDeleteComment(comment.id)}
+                                                        isExisting={!comment.id.toString().startsWith('temp-')}
+                                                        isCommentMode={isCommentMode}
+                                                        initialContent={comment.content}
+                                                    />
+                                                </CommentPositioner>
                                             ) : commentDisplays[comment.id]?.isEditing && comment.content && (
-                                                <div className="comment-display absolute -left-[268px] top-0 w-64 bg-white dark:bg-gray-700 p-4 rounded-lg shadow-lg z-50">
-                                                    <div className="flex items-start justify-between gap-3 mb-2">
-                                                        <div className="flex items-start gap-3">
-                                                            <div className="flex-shrink-0">
-                                                                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm">
-                                                                    {comment.user?.name?.charAt(0) || '?'}
+                                                <CommentPositioner>
+                                                    <div className="comment-display w-64 bg-white dark:bg-gray-700 p-4 rounded-lg shadow-lg z-50">
+                                                        <div className="flex items-start justify-between gap-3 mb-2">
+                                                            <div className="flex items-start gap-3">
+                                                                <div className="flex-shrink-0">
+                                                                    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm">
+                                                                        {comment.user?.name?.charAt(0) || '?'}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex-grow">
+                                                                    <div className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                                                                        {comment.user?.name || 'Anonymous'}
+                                                                    </div>
+                                                                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                                                                        {new Date(comment.createdAt).toLocaleDateString()}
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex-grow">
-                                                                <div className="font-medium text-sm text-gray-900 dark:text-gray-100">
-                                                                    {comment.user?.name || 'Anonymous'}
-                                                                </div>
-                                                                <div className="text-sm text-gray-600 dark:text-gray-400">
-                                                                    {new Date(comment.createdAt).toLocaleDateString()}
-                                                                </div>
-                                                            </div>
+                                                            {isCommentMode && (
+                                                                <button
+                                                                    onClick={() => handleDeleteComment(comment.id)}
+                                                                    className="text-sm text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                                                                >
+                                                                    Delete
+                                                                </button>
+                                                            )}
                                                         </div>
-                                                        {isCommentMode && (
-                                                            <button
-                                                                onClick={() => handleDeleteComment(comment.id)}
-                                                                className="text-sm text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                                                            >
-                                                                Delete
-                                                            </button>
-                                                        )}
+                                                        <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
+                                                            {comment.content}
+                                                        </p>
                                                     </div>
-                                                    <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
-                                                        {comment.content}
-                                                    </p>
-                                                </div>
+                                                </CommentPositioner>
                                             )}
                                         </div>
                                     ))}

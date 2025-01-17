@@ -29,33 +29,41 @@ class CanvasController extends Controller
     {
         $validated = $request->validate([
             'url' => 'required|url',
-            'description' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+            'thumbnail' => 'nullable|image|max:2048',
         ]);
+
+        if ($request->hasFile('thumbnail')) {
+            $path = $request->file('thumbnail')->store('thumbnails', 'public');
+            $validated['thumbnail'] = $path;
+        }
 
         $canvas = Canvas::create($validated);
-        
-        // Dispatch job to generate screenshot
-        GenerateCanvasScreenshot::dispatch($canvas);
 
-        return redirect()->route('canvas.editor', $canvas->id)->with([
-            'success' => true,
-            'message' => 'Canvas created successfully'
-        ]);
+        return redirect()->route('canvas')->with('success', 'Canvas created successfully.');
     }
 
     public function update(Request $request, Canvas $canvas)
     {
         $validated = $request->validate([
             'url' => 'required|url',
-            'description' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+            'thumbnail' => 'nullable|image|max:2048',
         ]);
 
-        $canvas->update($validated);
-        
-        // Dispatch job to generate new screenshot
-        GenerateCanvasScreenshot::dispatch($canvas);
+        if ($request->hasFile('thumbnail')) {
+            // Delete old thumbnail if it exists
+            if ($canvas->thumbnail && Storage::disk('public')->exists($canvas->thumbnail)) {
+                Storage::disk('public')->delete($canvas->thumbnail);
+            }
+            
+            $path = $request->file('thumbnail')->store('thumbnails', 'public');
+            $validated['thumbnail'] = $path;
+        }
 
-        return redirect()->back()->with('success', 'Canvas updated successfully. Screenshot is being generated...');
+        $canvas->update($validated);
+
+        return redirect()->route('canvas')->with('success', 'Canvas updated successfully.');
     }
 
     public function destroy(Canvas $canvas)
@@ -72,13 +80,13 @@ class CanvasController extends Controller
 
     public function editor(Canvas $canvas)
     {
-        // Add full URL to thumbnail if it exists
-        if ($canvas->thumbnail) {
-            $canvas->thumbnail = asset('storage/' . $canvas->thumbnail);
-        }
-        
         return Inertia::render('Editor', [
-            'canvas' => $canvas
+            'canvas' => [
+                'id' => $canvas->id,
+                'url' => $canvas->url,
+                'description' => $canvas->description,
+                'thumbnail' => $canvas->getThumbnailUrl(),
+            ]
         ]);
     }
 }

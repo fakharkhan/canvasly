@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\CanvasController;
+use App\Http\Controllers\ProxyController;
+use App\Http\Controllers\CommentController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -41,6 +43,21 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+
+Route::get('/proxy/{url}', [ProxyController::class, 'proxy'])
+    ->name('proxy')
+    ->middleware(['auth']);
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/canvas/{canvas}/comments', [CommentController::class, 'index'])
+        ->name('comments.index');
+    
+    Route::post('/canvas/{canvas}/comments', [CommentController::class, 'store'])
+        ->name('comments.store');
+    
+    Route::put('/canvas/{canvas}/comments/{comment}', [CommentController::class, 'update'])->name('comments.update');
+    Route::delete('/canvas/{canvas}/comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
 });
 
 require __DIR__.'/auth.php';

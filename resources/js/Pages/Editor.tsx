@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import CommentForm from '@/Components/CommentForm';
 
 interface Canvas {
     id: number;
@@ -33,10 +34,7 @@ interface Props {
         comment?: Comment;
         message?: string;
     };
-}
-
-interface CommentFormData {
-    content: string;
+    commentCount?: number;
 }
 
 interface CommentDisplay {
@@ -50,8 +48,8 @@ export default function Editor({ canvas, comments: initialComments = [], flash }
     const [currentPageUrl, setCurrentPageUrl] = useState<string>(canvas.url);
     const overlayRef = useRef<HTMLDivElement>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
-    const [commentForm, setCommentForm] = useState<CommentFormData>({ content: '' });
     const [commentDisplays, setCommentDisplays] = useState<Record<string | number, CommentDisplay>>({});
+    const [isCommentMode, setIsCommentMode] = useState(false);
 
     const getProxyUrl = (url: string): string => {
         const encodedUrl = btoa(url);
@@ -69,10 +67,14 @@ export default function Editor({ canvas, comments: initialComments = [], flash }
     };
 
     const handleOverlayClick = (e: React.MouseEvent) => {
-        const clickedElement = e.target as HTMLElement;
-        const isCommentWindow = clickedElement.closest('.comment-window');
+        if (!isCommentMode) return;
         
-        if (isCommentWindow) {
+        const clickedElement = e.target as HTMLElement;
+        const isCommentInterface = clickedElement.closest('.comment-window') || 
+                                 clickedElement.closest('.comment-badge') ||
+                                 clickedElement.closest('.comment-display');
+        
+        if (isCommentInterface) {
             return;
         }
 
@@ -99,7 +101,7 @@ export default function Editor({ canvas, comments: initialComments = [], flash }
         }
     };
 
-    const handleCommentSubmit = async (id: string) => {
+    const handleCommentSubmit = async (id: string, content: string) => {
         try {
             const commentToSave = comments.find(c => c.id.toString() === id);
             if (!commentToSave) return;
@@ -107,15 +109,29 @@ export default function Editor({ canvas, comments: initialComments = [], flash }
             await router.post(route('comments.store', { canvas: canvas.id }), {
                 x_position: commentToSave.x,
                 y_position: commentToSave.y,
-                content: commentForm.content,
+                content: content,
                 page_url: currentPageUrl,
             }, {
                 preserveState: true,
                 preserveScroll: true,
+                onSuccess: (page) => {
+                    const savedComment = page.props.flash.comment;
+                    // Update comments immediately with the saved comment
+                    setComments(prev => prev.map(comment => 
+                        comment.id.toString() === id 
+                            ? { ...savedComment, isOpen: false }
+                            : comment
+                    ).filter(comment => !comment.id.toString().startsWith('temp-')));
+
+                    // Set display state to show the comment
+                    setCommentDisplays(prev => ({
+                        ...prev,
+                        [savedComment.id]: { isEditing: true }
+                    }));
+
+                    setActiveComment(null);
+                }
             });
-            
-            setActiveComment(null);
-            setCommentForm({ content: '' });
         } catch (error) {
             console.error('Error saving comment:', error);
         }
@@ -124,7 +140,28 @@ export default function Editor({ canvas, comments: initialComments = [], flash }
     const handleCloseComment = (id: string) => {
         setComments(prev => prev.filter(comment => comment.id !== id));
         setActiveComment(null);
-        setCommentForm({ content: '' });
+    };
+
+    const handleDeleteComment = async (id: string | number) => {
+        try {
+            await router.delete(route('comments.destroy', { 
+                canvas: canvas.id,
+                comment: id 
+            }), {
+                preserveState: true,
+                preserveScroll: true,
+            });
+            
+            // Remove comment from local state
+            setComments(prev => prev.filter(comment => comment.id !== id));
+            setCommentDisplays(prev => {
+                const newDisplays = { ...prev };
+                delete newDisplays[id];
+                return newDisplays;
+            });
+        } catch (error) {
+            console.error('Error deleting comment:', error);
+        }
     };
 
     // Listen for iframe URL changes
@@ -157,15 +194,20 @@ export default function Editor({ canvas, comments: initialComments = [], flash }
 
     useEffect(() => {
         if (flash?.comment) {
-            setComments(prev => prev.map(comment => 
-                comment.id.toString() === flash.comment?.id.toString() 
-                    ? { ...flash.comment, isOpen: false }
-                    : comment
-            ));
-            // Set display state for the new comment
+            const savedComment = flash.comment;
+            setComments(prev => {
+                // Remove any temporary version of this comment
+                const filtered = prev.filter(comment => 
+                    !comment.id.toString().startsWith('temp-') && 
+                    comment.id.toString() !== savedComment.id.toString()
+                );
+                // Add the saved comment
+                return [...filtered, { ...savedComment, isOpen: false }];
+            });
+            
             setCommentDisplays(prev => ({
                 ...prev,
-                [flash.comment.id]: { isEditing: false }
+                [savedComment.id]: { isEditing: true }
             }));
         }
     }, [flash?.comment]);
@@ -177,116 +219,144 @@ export default function Editor({ canvas, comments: initialComments = [], flash }
         }));
     };
 
+    // Add a memoized comment count for the current page
+    const currentPageCommentCount = useMemo(() => {
+        return comments.filter(c => c.pageUrl === currentPageUrl).length;
+    }, [comments, currentPageUrl]);
+
     return (
         <AuthenticatedLayout
             hideNavigation={true}
             header={
-                <div className="flex items-center gap-3">
-                    <Link
-                        href={route('canvas')}
-                        className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            strokeWidth={2}
-                            stroke="currentColor"
-                            className="h-6 w-6"
-                        >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"
-                            />
-                        </svg>
-                    </Link>
+                <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-3">
-                        <div className="h-8 w-14 overflow-hidden rounded-sm bg-gray-100 dark:bg-gray-700">
-                            <img
-                                src={getThumbnailUrl(canvas)}
-                                alt={canvas.description || 'Canvas thumbnail'}
-                                className="h-full w-full object-cover"
-                            />
+                        <Link
+                            href={route('canvas')}
+                            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                strokeWidth={2}
+                                stroke="currentColor"
+                                className="h-6 w-6"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"
+                                />
+                            </svg>
+                        </Link>
+                        <div className="flex items-center gap-3">
+                            <div className="h-8 w-14 overflow-hidden rounded-sm bg-gray-100 dark:bg-gray-700">
+                                <img
+                                    src={getThumbnailUrl(canvas)}
+                                    alt={canvas.description || 'Canvas thumbnail'}
+                                    className="h-full w-full object-cover"
+                                />
+                            </div>
+                            <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
+                                {canvas.url}
+                            </h2>
                         </div>
-                        <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
-                            {canvas.url}
-                        </h2>
+                    </div>
+
+                    <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600 dark:text-gray-300" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <span className="text-sm text-gray-600 dark:text-gray-300">
+                                {currentPageCommentCount} comments
+                            </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setIsCommentMode(!isCommentMode)}
+                                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                                    isCommentMode ? 'bg-blue-500' : 'bg-gray-200 dark:bg-gray-700'
+                                }`}
+                            >
+                                <span className="sr-only">Toggle comment mode</span>
+                                <span
+                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                        isCommentMode ? 'translate-x-5' : 'translate-x-0'
+                                    }`}
+                                />
+                            </button>
+                            <span className="text-sm text-gray-600 dark:text-gray-300">
+                                {isCommentMode ? 'Comment mode on' : 'Browse mode'}
+                            </span>
+                        </div>
                     </div>
                 </div>
             }
         >
             <Head title={`Edit Canvas - ${canvas.url}`} />
 
-            <div className="mt-2 px-2">
-                <div className="h-[calc(100vh-7.5rem)] w-full">
-                    <div className="h-full overflow-hidden bg-white shadow-sm dark:bg-gray-800">
-                        <div className="h-full p-6 text-gray-900 dark:text-gray-100 relative">
-                            {isLoading && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-800">
-                                    <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-blue-500" />
-                                </div>
-                            )}
-                            <div className="relative h-full w-full">
-                                <iframe 
-                                    ref={iframeRef}
-                                    src={getProxyUrl(canvas.url)}
-                                    className="h-full w-full border-0"
-                                    sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                                    referrerPolicy="no-referrer"
-                                />
-                                <div 
-                                    ref={overlayRef}
-                                    onClick={handleOverlayClick}
-                                    className="absolute inset-0 pointer-events-auto"
-                                    style={{ background: 'transparent' }}
-                                >
-                                    {comments
-                                        .filter(comment => comment.pageUrl === currentPageUrl)
-                                        .map(comment => (
-                                            <div
-                                                key={comment.id}
-                                                className="absolute"
-                                                style={{
-                                                    left: `${comment.x}px`,
-                                                    top: `${comment.y}px`,
+            <div className="w-full h-screen">
+                <div className="h-full overflow-hidden bg-white dark:bg-gray-800">
+                    <div className="h-full text-gray-900 dark:text-gray-100 relative">
+                        {isLoading && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-800">
+                                <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-blue-500" />
+                            </div>
+                        )}
+                        <div className="relative h-full w-full">
+                            <iframe 
+                                ref={iframeRef}
+                                src={getProxyUrl(canvas.url)}
+                                className="h-full w-full border-0"
+                                sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                                referrerPolicy="no-referrer"
+                            />
+                            <div 
+                                ref={overlayRef}
+                                onClick={handleOverlayClick}
+                                className={`absolute inset-0 ${
+                                    isCommentMode ? 'pointer-events-auto cursor-crosshair' : 'pointer-events-none'
+                                }`}
+                                style={{ background: 'transparent' }}
+                            >
+                                {comments
+                                    .filter(comment => comment.pageUrl === currentPageUrl)
+                                    .map(comment => (
+                                        <div
+                                            key={comment.id}
+                                            className="absolute"
+                                            style={{
+                                                left: `${comment.x}px`,
+                                                top: `${comment.y}px`,
+                                            }}
+                                        >
+                                            <div 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleCommentClick(comment.id);
                                                 }}
+                                                className="comment-badge flex items-center justify-center h-6 w-6 rounded-full bg-blue-500 text-white text-sm cursor-pointer hover:bg-blue-600"
+                                                style={{ pointerEvents: 'auto' }}
                                             >
-                                                <div 
-                                                    onClick={() => handleCommentClick(comment.id)}
-                                                    className="flex items-center justify-center h-6 w-6 rounded-full bg-blue-500 text-white text-sm cursor-pointer hover:bg-blue-600"
-                                                >
-                                                    {comments.indexOf(comment) + 1}
-                                                </div>
-                                                {comment.isOpen ? (
-                                                    <div className="comment-window absolute left-8 top-0 w-64 bg-white dark:bg-gray-700 p-4 rounded-lg shadow-lg z-50">
-                                                        <textarea
-                                                            className="w-full p-2 border rounded dark:bg-gray-800 dark:border-gray-600 mb-3"
-                                                            placeholder="Add your comment..."
-                                                            value={commentForm.content}
-                                                            onChange={(e) => setCommentForm({ content: e.target.value })}
-                                                            rows={3}
-                                                            autoFocus
-                                                        />
-                                                        <div className="flex justify-end gap-2">
-                                                            <button
-                                                                onClick={() => handleCloseComment(comment.id.toString())}
-                                                                className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white"
-                                                            >
-                                                                Cancel
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleCommentSubmit(comment.id.toString())}
-                                                                disabled={!commentForm.content.trim()}
-                                                                className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                            >
-                                                                Save
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ) : commentDisplays[comment.id]?.isEditing && comment.content && (
-                                                    <div className="absolute left-8 top-0 w-64 bg-white dark:bg-gray-700 p-4 rounded-lg shadow-lg z-50">
-                                                        <div className="flex items-start gap-3 mb-2">
+                                                {comments.indexOf(comment) + 1}
+                                            </div>
+                                            {comment.isOpen ? (
+                                                <CommentForm
+                                                    onSubmit={(content) => handleCommentSubmit(comment.id.toString(), content)}
+                                                    onCancel={() => handleCloseComment(comment.id.toString())}
+                                                    onDelete={() => handleDeleteComment(comment.id)}
+                                                    isExisting={!comment.id.toString().startsWith('temp-')}
+                                                    isCommentMode={isCommentMode}
+                                                    initialContent={comment.content}
+                                                />
+                                            ) : commentDisplays[comment.id]?.isEditing && comment.content && (
+                                                <div className="comment-display absolute left-8 top-0 w-64 bg-white dark:bg-gray-700 p-4 rounded-lg shadow-lg z-50">
+                                                    <div className="flex items-start justify-between gap-3 mb-2">
+                                                        <div className="flex items-start gap-3">
                                                             <div className="flex-shrink-0">
                                                                 <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm">
                                                                     {comment.user?.name?.charAt(0) || '?'}
@@ -301,19 +371,33 @@ export default function Editor({ canvas, comments: initialComments = [], flash }
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
-                                                            {comment.content}
-                                                        </p>
+                                                        {isCommentMode && (
+                                                            <button
+                                                                onClick={() => handleDeleteComment(comment.id)}
+                                                                className="text-sm text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                </div>
+                                                    <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
+                                                        {comment.content}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <style jsx>{`
+                .h-screen {
+                    height: calc(100vh - 4rem) !important;
+                }
+            `}</style>
         </AuthenticatedLayout>
     );
 } 

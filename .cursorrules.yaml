@@ -1,0 +1,101 @@
+language: "*"
+formatter: prettier
+rules:
+  typescript:
+    - pattern: "**/resources/js/Pages/**/*.tsx"
+      options:
+        framework: "React, TypeScript, Inertia"
+        rules:
+          - "Use TypeScript for type safety and maintainability"
+          - "Follow PascalCase for component names"
+          - "Integrate Inertia by correctly mapping backend routes and frontend pages"
+          - "Ensure proper usage of hooks like useEffect and useState"
+          - "Use ES6+ syntax for modern JavaScript coding"
+          - "Optimize components for server-side rendering (SSR)"
+          - "Validate all props using TypeScript interfaces or types"
+          - "Ensure secure handling of dynamic data passed from the backend"
+
+  blade:
+    - pattern: "**/resources/views/**/*.blade.php"
+      options:
+        framework: "Laravel Blade"
+        rules:
+          - "Minimize inline logic in Blade templates"
+          - "Use @section, @yield, and @include for layouts"
+          - "Always escape output using {{ }} unless explicitly intended"
+          - "Use Laravel's built-in directives (@auth, @guest, @foreach)"
+          - "Avoid code duplication by using Blade components"
+
+  javascript:
+    - pattern: "**/public/build/**/*.js"
+      options:
+        framework: "JavaScript"
+        rules:
+          - "Use Vite build process only"
+          - "Optimize for production with minification"
+          - "Ensure gzip/Brotli compression"
+          - "Use ES6+ syntax"
+
+  node:
+    - pattern: "**/bootstrap/ssr/**/*.js"
+      options:
+        framework: "Node.js, Inertia SSR"
+        rules:
+          - "Optimize SSR performance"
+          - "Configure proper SSR hydration"
+          - "Use server-side caching"
+          - "Validate manifest file references"
+
+  php:
+    - pattern: "**/app/**/*.php"
+      options:
+        framework: "Laravel 11, PHP 8.2, Inertia"
+        rules:
+          - "Follow PSR-12 standards"
+          - "Use PHP 8.2 features appropriately"
+          - "Implement strict typing"
+          - "Use dependency injection"
+          - "Validate requests with Form Requests"
+          - "Use Query Builder or Eloquent ORM"
+          - "Write modular code"
+          - "Return Inertia responses"
+          - "Use Laravel resources for API responses"
+          - "Keep controllers concise"
+
+  routes:
+    - pattern: "**/routes/**/*.php"
+      options:
+        framework: "Laravel 11, Inertia"
+        rules:
+          - "Return Inertia pages for frontend"
+          - "Use Inertia::render() for components"
+          - "Group related routes"
+          - "Use route bindings"
+          - "Document routes with comments"
+          - "Separate API and Inertia routes"
+
+  migrations:
+    - pattern: "**/database/migrations/**/*.php"
+      options:
+        framework: "Laravel Migrations"
+        rules:
+          - "Include timestamps()"
+          - "Use softDeletes() when needed"
+          - "Index foreign keys properly"
+          - "Use meaningful column names"
+          - "Add audit fields when required"
+          - "Keep migrations atomic"
+
+style:
+  - "Use Tailwind utility classes"
+  - "Follow responsive design principles"
+  - "Maintain WCAG accessibility standards"
+  - "Optimize CSS with Tailwind purge"
+
+general:
+  - "Maintain consistent formatting"
+  - "Use environment variables"
+  - "Apply DRY principles"
+  - "Write meaningful comments"
+  - "Test thoroughly"
+  - "Keep dependencies updated" 

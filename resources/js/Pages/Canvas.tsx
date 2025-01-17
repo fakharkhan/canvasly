@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm } from '@inertiajs/react';
-import { PencilIcon, XMarkIcon, TrashIcon, PhotoIcon, PlusIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { Head, useForm, Link } from '@inertiajs/react';
+import { PencilIcon, XMarkIcon, TrashIcon, PhotoIcon, PlusIcon, ExclamationTriangleIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
 import { useState, useEffect } from 'react';
 import InputError from '@/Components/InputError';
 import InputLabel from '@/Components/InputLabel';
@@ -302,6 +302,12 @@ export default function Canvas({ canvases: initialCanvases }: Props) {
                                         {canvas.url}
                                     </div>
                                     <div className="flex space-x-1">
+                                        <Link
+                                            href={route('canvas.editor', canvas.id)}
+                                            className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                                        >
+                                            <GlobeAltIcon className="h-4 w-4" />
+                                        </Link>
                                         <button
                                             onClick={() => openModal(canvas)}
                                             className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"

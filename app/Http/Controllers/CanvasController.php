@@ -71,4 +71,11 @@ class CanvasController extends Controller
         
         return redirect()->back()->with('success', 'Canvas deleted successfully');
     }
+
+    public function editor(Canvas $canvas)
+    {
+        return Inertia::render('Editor', [
+            'canvas' => $canvas
+        ]);
+    }
 }

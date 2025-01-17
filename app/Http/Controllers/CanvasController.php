@@ -72,6 +72,11 @@ class CanvasController extends Controller
 
     public function editor(Canvas $canvas)
     {
+        // Add full URL to thumbnail if it exists
+        if ($canvas->thumbnail) {
+            $canvas->thumbnail = asset('storage/' . $canvas->thumbnail);
+        }
+        
         return Inertia::render('Editor', [
             'canvas' => $canvas
         ]);

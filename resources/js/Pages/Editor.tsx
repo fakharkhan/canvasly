@@ -13,6 +13,13 @@ interface Props {
 }
 
 export default function Editor({ canvas }: Props) {
+    const getThumbnailUrl = (canvas: Canvas): string => {
+        if (canvas.thumbnail) {
+            return canvas.thumbnail;
+        }
+        return 'https://via.placeholder.com/1280x720?text=No+Preview';
+    };
+
     return (
         <AuthenticatedLayout
             hideNavigation={true}
@@ -37,9 +44,18 @@ export default function Editor({ canvas }: Props) {
                             />
                         </svg>
                     </Link>
-                    <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
-                        Canvas Editor - {canvas.url}
-                    </h2>
+                    <div className="flex items-center gap-3">
+                        <div className="h-8 w-14 overflow-hidden rounded-sm bg-gray-100 dark:bg-gray-700">
+                            <img
+                                src={getThumbnailUrl(canvas)}
+                                alt={canvas.description || 'Canvas thumbnail'}
+                                className="h-full w-full object-cover"
+                            />
+                        </div>
+                        <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
+                            {canvas.url}
+                        </h2>
+                    </div>
                 </div>
             }
         >

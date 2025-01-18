@@ -175,7 +175,7 @@ export default function Canvas({ canvases: initialCanvases }: Props) {
                         {canvases.map((canvas) => (
                             <div
                                 key={canvas.id}
-                                className={`group relative overflow-hidden rounded-lg bg-white shadow-sm dark:bg-gray-800 transition-all duration-300 ease-in-out ${
+                                className={`group relative overflow-hidden rounded-lg bg-white shadow-sm dark:bg-gray-800 transition-all duration-300 ease-in-out border border-indigo-200 dark:border-indigo-800 hover:border-indigo-400 dark:hover:border-indigo-600 ${
                                     removingCanvases.has(canvas.id)
                                         ? 'opacity-0 scale-95 transform'
                                         : 'opacity-100 scale-100'
